@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!--
+  ¡No hace falta editar este archivo!
+  Todos los textos, precios, colores y enlaces están en config.js.
+  Al publicar en GitHub, el título, la descripción y los datos para Google
+  se escriben aquí automáticamente a partir de config.js.
+-->
+<!--INICIO:CABECERA-->
+<title>Cargando…</title>
+<!--FIN:CABECERA-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="assets/css/estilos.css">
+<script>
+  document.documentElement.className += ' js';
+  window.erroresConfig = [];
+  window.addEventListener('error', function (e) {
+    if (e.filename && /config\.js/.test(e.filename)) window.erroresConfig.push({ mensaje: e.message, linea: e.lineno });
+  });
+</script>
+<script src="config.js" defer></script>
+<script src="assets/js/plantilla.js" defer></script>
+<script src="assets/js/app.js" defer></script>
+</head>
+<body>
+<div id="app"><!--INICIO:CUERPO--><div class="cargando" role="status" aria-label="Cargando"></div><!--FIN:CUERPO--></div>
+</body>
+</html>

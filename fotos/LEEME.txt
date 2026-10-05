@@ -1,0 +1,17 @@
+CARPETA DE FOTOS
+================
+
+Sube aquí las fotos del negocio (botón "Add file" > "Upload files" en GitHub).
+
+Después, en config.js, escribe la ruta de cada foto. Por ejemplo, si subes
+"portada.jpg", en config.js pon:
+
+    imagen: "fotos/portada.jpg",
+
+Consejos:
+- Usa nombres sencillos, sin espacios ni tildes: portada.jpg, plato-1.jpg...
+- Las mayúsculas cuentan: "Portada.JPG" no es lo mismo que "portada.jpg".
+- Tamaño recomendado: 1600 px de ancho como máximo y menos de 400 KB por foto.
+  Puedes reducirlas gratis en https://squoosh.app
+- También puedes subir aquí tu logo (mejor en PNG con fondo transparente)
+  y la carta en PDF.
