@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://alvaroperezdeaguado-art.github.io/web-negocios-locales/sitemap.xml

@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Vídeo promocional</title>
+<!--
+  Generador de vídeo promocional para redes (Reels, TikTok, Stories, posts).
+  Usa los mismos datos de config.js: nombre, portada, platos destacados,
+  puntos fuertes, dirección y teléfono. No hace falta tocar este archivo.
+  Ábrelo en tu-web/promo.html, pulsa «Descargar vídeo» y súbelo a Instagram.
+-->
+<style>
+  :root { --fondo: #111; --panel: #1c1c1c; --texto: #f2f2f2; --suave: #a3a3a3; --acento: #A8432A; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 18px;
+    padding: 24px 16px 40px;
+    background: var(--fondo);
+    color: var(--texto);
+    font: 15px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+  h1 { margin: 0; font-size: 1.25rem; font-weight: 600; text-align: center; }
+  p { margin: 0; color: var(--suave); text-align: center; max-width: 34rem; }
+  .escena { width: 100%; display: flex; justify-content: center; }
+  canvas {
+    display: block;
+    max-width: 100%;
+    max-height: 72vh;
+    border-radius: 14px;
+    background: #000;
+    box-shadow: 0 30px 60px -20px rgb(0 0 0 / .7);
+  }
+  .controles { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+  button, select {
+    min-height: 44px;
+    padding: 0 18px;
+    border: 1px solid #333;
+    border-radius: 999px;
+    background: var(--panel);
+    color: var(--texto);
+    font: 600 14px/1 inherit;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  button.principal { border-color: transparent; background: var(--acento); color: #fff; }
+  button:disabled { opacity: .5; cursor: wait; }
+  .barra { width: min(420px, 100%); height: 4px; border-radius: 4px; background: #2a2a2a; overflow: hidden; }
+  .barra span { display: block; height: 100%; width: 0; background: var(--acento); }
+  .estado { min-height: 1.5em; font-size: 14px; }
+  a { color: var(--texto); }
+</style>
+</head>
+<body>
+  <h1>Vídeo promocional para redes</h1>
+  <p>Se crea solo con los datos de config.js. Elige el formato, dale a «Descargar vídeo» y súbelo a Instagram, TikTok o WhatsApp.</p>
+  <div class="escena"><canvas id="lienzo" width="1080" height="1920" aria-label="Vista previa del vídeo promocional"></canvas></div>
+  <div class="barra" aria-hidden="true"><span id="avance"></span></div>
+  <div class="controles">
+    <select id="formato" aria-label="Formato del vídeo">
+      <option value="1080x1920">Vertical 9:16 · Reels, TikTok, Stories</option>
+      <option value="1080x1350">Retrato 4:5 · Publicación de Instagram</option>
+      <option value="1080x1080">Cuadrado 1:1</option>
+      <option value="1920x1080">Horizontal 16:9 · YouTube, web</option>
+    </select>
+    <button type="button" id="reproducir">Repetir</button>
+    <button type="button" id="descargar" class="principal">Descargar vídeo</button>
+  </div>
+  <p class="estado" id="estado" role="status"></p>
+  <p><a href="./">← Volver a la web</a></p>
+
+<script src="config.js"></script>
+<script src="assets/js/plantilla.js"></script>
+<script>
+(function () {
+  'use strict';
+  var C = window.CONFIG || {};
+  var negocio = C.negocio || {};
+  var portada = C.portada || {};
+  var nosotros = C.sobreNosotros || {};
+  var colores = (C.apariencia || {}).colores || {};
+  var tipos = (C.apariencia || {}).tipografias || {};
+  var ubic = C.ubicacion || {};
+  var contacto = C.contacto || {};
+
+  var PRINCIPAL = colores.principal || '#A8432A';
+  var SOBRE = colores.textoSobrePrincipal || '#FFFFFF';
+  var OSCURO = colores.oscuro || '#1F1915';
+  var FONDO = colores.fondo || '#FBF6EF';
+  var F_TIT = tipos.titulos || 'Georgia';
+  var F_TXT = tipos.texto || 'system-ui';
+  document.documentElement.style.setProperty('--acento', PRINCIPAL);
+
+  var lienzo = document.getElementById('lienzo');
+  var ctx = lienzo.getContext('2d');
+  var W = 1080, H = 1920;
+
+  /* ---------- Datos ---------------------------------------------------- */
+  function urlFoto(src, ancho) {
+    if (!src) return '';
+    if (/^https:\/\/images\.unsplash\.com\//i.test(src)) return src.split('?')[0] + '?auto=format&fit=crop&q=80&w=' + ancho;
+    return src;
+  }
+  var platos = ((C.destacados || {}).platos || []).filter(function (p) { return p && p.nombre; }).slice(0, 3);
+  var puntos = (nosotros.puntosFuertes || []).filter(function (p) { return p && p.titulo; }).slice(0, 3);
+  var fotos = {};
+  function cargarFoto(clave, src) {
+    if (!src) return Promise.resolve();
+    return new Promise(function (ok) {
+      var img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = function () { fotos[clave] = img; ok(); };
+      img.onerror = function () { ok(); };
+      img.src = urlFoto(src, 1600);
+    });
+  }
+
+  /* ---------- Línea de tiempo (segundos) -------------------------------- */
+  var escenas = [];
+  var t0 = 0;
+  function escena(dura, dibujar) { escenas.push({ inicio: t0, dura: dura, dibujar: dibujar }); t0 += dura; }
+  escena(3.4, escenaNombre);
+  if (portada.titulo) escena(3, escenaLema);
+  platos.forEach(function (p, i) { escena(2.2, function (t, d) { escenaPlato(t, d, p, i); }); });
+  if (puntos.length) escena(3, escenaPuntos);
+  escena(3.6, escenaFinal);
+  var DURACION = t0;
+  var TRANSICION = 0.45;
+
+  /* ---------- Utilidades ----------------------------------------------- */
+  function lim(x) { return Math.max(0, Math.min(1, x)); }
+  function tramo(t, a, b) { return lim((t - a) / (b - a)); }
+  function salida(x) { return 1 - Math.pow(1 - x, 4); }
+  function rebote(x) { var c = 1.70158; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); }
+  function u(n) { return n * Math.min(W, H) / 1080; } // unidades relativas al lado corto
+  function vertical() { return H / W > 1.2; }
+
+  function fuente(peso, tam, familia, cursiva) {
+    return (cursiva ? 'italic ' : '') + peso + ' ' + Math.round(tam) + 'px "' + familia + '", Georgia, sans-serif';
+  }
+  function lineas(texto, maxAncho) {
+    var palabras = String(texto).split(/\s+/), res = [], actual = '';
+    palabras.forEach(function (p) {
+      var prueba = actual ? actual + ' ' + p : p;
+      if (ctx.measureText(prueba).width > maxAncho && actual) { res.push(actual); actual = p; } else actual = prueba;
+    });
+    if (actual) res.push(actual);
+    return res;
+  }
+  function fotoCubrir(img, x, y, w, h, zoom, dx, dy) {
+    if (!img) {
+      var g = ctx.createLinearGradient(x, y, x + w, y + h);
+      g.addColorStop(0, PRINCIPAL); g.addColorStop(1, OSCURO);
+      ctx.fillStyle = g; ctx.fillRect(x, y, w, h); return;
+    }
+    var esc = Math.max(w / img.width, h / img.height) * (zoom || 1);
+    var iw = img.width * esc, ih = img.height * esc;
+    ctx.drawImage(img, x + (w - iw) / 2 + (dx || 0), y + (h - ih) / 2 + (dy || 0), iw, ih);
+  }
+  function velo(arriba, abajo) {
+    var g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, 'rgba(0,0,0,' + arriba + ')');
+    g.addColorStop(.45, 'rgba(0,0,0,' + (arriba * .4) + ')');
+    g.addColorStop(1, 'rgba(0,0,0,' + abajo + ')');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+  // Texto que sube palabra a palabra desde detrás de una máscara.
+  function textoPalabras(texto, x, y, maxAncho, tam, t, opciones) {
+    opciones = opciones || {};
+    ctx.font = fuente(opciones.peso || 500, tam, opciones.familia || F_TIT, opciones.cursiva);
+    ctx.textBaseline = 'alphabetic';
+    var filas = lineas(texto, maxAncho), alto = tam * (opciones.interlineado || 1.05), n = 0;
+    filas.forEach(function (fila, f) {
+      var ancho = ctx.measureText(fila).width;
+      var cx = opciones.centrado ? x - ancho / 2 : x;
+      var yy = y + f * alto;
+      fila.split(' ').forEach(function (pal) {
+        var k = salida(tramo(t, n * 0.07, n * 0.07 + 0.6));
+        var aw = ctx.measureText(pal + ' ').width;
+        ctx.save();
+        ctx.beginPath(); ctx.rect(cx - tam * .1, yy - tam * 1.05, aw + tam * .2, tam * 1.35); ctx.clip();
+        ctx.fillStyle = opciones.color || '#fff';
+        ctx.fillText(pal, cx, yy + (1 - k) * tam * 1.2);
+        ctx.restore();
+        cx += aw; n++;
+      });
+    });
+    return filas.length * alto;
+  }
+  function textoSimple(texto, x, y, tam, color, peso, familia, alfa, centrado, espaciado) {
+    ctx.save();
+    ctx.globalAlpha = alfa == null ? 1 : alfa;
+    ctx.font = fuente(peso || 500, tam, familia || F_TXT);
+    ctx.fillStyle = color || '#fff';
+    ctx.textAlign = centrado ? 'center' : 'left';
+    if (espaciado && 'letterSpacing' in ctx) ctx.letterSpacing = espaciado + 'px';
+    ctx.fillText(texto, x, y);
+    ctx.restore();
+  }
+  function pastilla(texto, x, y, tam, fondo, color, escala) {
+    ctx.save();
+    ctx.font = fuente(700, tam, F_TXT);
+    var w = ctx.measureText(texto).width + tam * 1.6, h = tam * 2;
+    ctx.translate(x + w / 2, y + h / 2); ctx.scale(escala, escala);
+    ctx.fillStyle = fondo;
+    ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, h / 2); ctx.fill();
+    ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(texto, 0, tam * .05);
+    ctx.restore();
+    return w;
+  }
+  function margen() { return u(90); }
+
+  /* ---------- Escenas -------------------------------------------------- */
+  function escenaNombre(t, d) {
+    fotoCubrir(fotos.portada, 0, 0, W, H, 1.18 - 0.12 * (t / d));
+    velo(.55, .85);
+    var m = margen(), ancho = W - m * 2;
+    var base = vertical() ? H * .62 : H * .55;
+    if (portada.antetitulo) {
+      var k = salida(tramo(t, .2, .9));
+      textoSimple(String(portada.antetitulo).toUpperCase(), m, base - u(150) + (1 - k) * u(20), u(30), 'rgba(255,255,255,.9)', 600, F_TXT, k, false, u(4));
+      ctx.fillStyle = PRINCIPAL; ctx.fillRect(m, base - u(130), u(90) * salida(tramo(t, .4, 1.2)), u(5));
+    }
+    var alto = textoPalabras(negocio.nombre || '', m, base, ancho, u(vertical() ? 150 : 130), t - .35, { peso: 600 });
+    if (negocio.eslogan) {
+      var k2 = salida(tramo(t, 1.3, 2));
+      ctx.font = fuente(400, u(40), F_TXT);
+      lineas(negocio.eslogan, ancho).forEach(function (l, i) {
+        textoSimple(l, m, base + alto + u(20) + i * u(54) + (1 - k2) * u(24), u(40), 'rgba(255,255,255,.85)', 400, F_TXT, k2);
+      });
+    }
+  }
+
+  function escenaLema(t, d) {
+    var img = fotos.nosotros || fotos.portada;
+    fotoCubrir(img, 0, 0, W, H, 1.05 + 0.1 * (t / d), -u(40) * (t / d));
+    ctx.fillStyle = OSCURO; ctx.globalAlpha = .62; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
+    // Barrido de color al entrar
+    var k = salida(tramo(t, 0, .7));
+    ctx.fillStyle = PRINCIPAL;
+    ctx.fillRect(0, 0, W * (1 - k), H);
+    var m = margen();
+    ctx.font = fuente(500, u(110), F_TIT, true);
+    var filas = lineas(portada.titulo, W - m * 2).length;
+    var y = H / 2 - (filas * u(110) * 1.05) / 2 + u(80);
+    textoSimple('“', W / 2, y - u(70), u(220), PRINCIPAL, 600, F_TIT, salida(tramo(t, .4, 1)), true);
+    textoPalabras(portada.titulo, W / 2, y + u(40), W - m * 2, u(110), t - .45, { cursiva: true, centrado: true });
+  }
+
+  function escenaPlato(t, d, plato, i) {
+    ctx.fillStyle = i % 2 ? OSCURO : FONDO; ctx.fillRect(0, 0, W, H);
+    var oscuro = i % 2 === 1, m = margen();
+    var vert = vertical();
+    // Foto que se destapa con una cortina diagonal
+    var fx = vert ? 0 : W * .45, fy = 0, fw = vert ? W : W * .55, fh = vert ? H * .62 : H;
+    var k = salida(tramo(t, 0, .8));
+    ctx.save();
+    ctx.beginPath();
+    if (vert) ctx.rect(fx, fy, fw, fh * k); else ctx.rect(fx + fw * (1 - k), fy, fw * k, fh);
+    ctx.clip();
+    fotoCubrir(fotos['plato' + i], fx, fy, fw, fh, 1.15 - .1 * (t / d));
+    ctx.restore();
+    // Número
+    var ty = vert ? fh + u(130) : H * .38;
+    var tx = m, maxW = vert ? W - m * 2 : W * .45 - m * 1.5;
+    textoSimple('0' + (i + 1) + ' / 0' + platos.length, tx, ty - u(40), u(28), PRINCIPAL, 700, F_TXT, salida(tramo(t, .3, .8)), false, u(3));
+    var alto = textoPalabras(plato.nombre, tx, ty + u(50), maxW, u(vert ? 84 : 72), t - .45, { color: oscuro ? '#fff' : (colores.texto || '#2A211C'), peso: 600 });
+    if (plato.descripcion && vert) {
+      var kd = salida(tramo(t, .9, 1.4));
+      ctx.font = fuente(400, u(34), F_TXT);
+      lineas(plato.descripcion, maxW).slice(0, 2).forEach(function (l, j) {
+        textoSimple(l, tx, ty + u(60) + alto + j * u(46) + (1 - kd) * u(18), u(34), oscuro ? 'rgba(255,255,255,.75)' : 'rgba(0,0,0,.6)', 400, F_TXT, kd);
+      });
+    }
+    if (plato.precio) {
+      var kp = tramo(t, .8, 1.3);
+      if (kp > 0) {
+        var pw = vert ? W - m - u(260) : fx - u(260);
+        var py = vert ? fh - u(70) : H * .7;
+        pastilla((window.Plantilla ? Plantilla.precio(C, plato.precio) : String(plato.precio)), pw, py, u(44), PRINCIPAL, SOBRE, rebote(kp));
+      }
+    }
+  }
+
+  function escenaPuntos(t) {
+    ctx.fillStyle = PRINCIPAL; ctx.fillRect(0, 0, W, H);
+    // Círculos decorativos que giran
+    ctx.save();
+    ctx.translate(W * .85, H * .15); ctx.rotate(t * .4);
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = u(3);
+    for (var r = 1; r <= 3; r++) { ctx.beginPath(); ctx.arc(0, 0, u(90) * r, 0, Math.PI * 1.4); ctx.stroke(); }
+    ctx.restore();
+    var m = margen();
+    var alto = u(vertical() ? 250 : 170);
+    var y0 = H / 2 - (puntos.length * alto) / 2 + u(60);
+    textoSimple((nosotros.antetitulo || 'Por qué venir').toUpperCase(), m, y0 - u(90), u(30), SOBRE, 700, F_TXT, salida(tramo(t, 0, .5)), false, u(4));
+    puntos.forEach(function (p, i) {
+      var k = salida(tramo(t, .25 + i * .3, .95 + i * .3));
+      var y = y0 + i * alto;
+      ctx.save();
+      ctx.globalAlpha = k;
+      ctx.translate((1 - k) * u(-120), 0);
+      ctx.fillStyle = 'rgba(255,255,255,.95)';
+      ctx.beginPath(); ctx.arc(m + u(30), y - u(24), u(30) * k, 0, Math.PI * 2); ctx.fill();
+      textoSimple('✓', m + u(30), y - u(10), u(36), PRINCIPAL, 700, F_TXT, 1, true);
+      textoSimple(p.titulo, m + u(90), y, u(64), SOBRE, 600, F_TIT, 1);
+      if (p.texto && vertical()) {
+        ctx.font = fuente(400, u(32), F_TXT);
+        lineas(p.texto, W - m * 2 - u(90)).slice(0, 2).forEach(function (l, j) {
+          textoSimple(l, m + u(90), y + u(56) + j * u(42), u(32), 'rgba(255,255,255,.82)', 400, F_TXT, 1);
+        });
+      }
+      ctx.restore();
+    });
+  }
+
+  function escenaFinal(t, d) {
+    fotoCubrir(fotos.portada, 0, 0, W, H, 1.25 - .08 * (t / d));
+    ctx.fillStyle = OSCURO; ctx.globalAlpha = .78; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
+    var cx = W / 2, cy = H / 2;
+    var ka = salida(tramo(t, 0, .7));
+    textoSimple((negocio.nombre || '').toUpperCase(), cx, cy - u(260) + (1 - ka) * u(20), u(34), 'rgba(255,255,255,.85)', 700, F_TXT, ka, true, u(6));
+    textoPalabras(portada.botonPrincipal || 'Reserva tu mesa', cx, cy - u(110), W - margen() * 2, u(120), t - .2, { centrado: true, peso: 600 });
+    // Botón que late
+    var kb = tramo(t, .9, 1.4);
+    if (kb > 0) {
+      var latido = 1 + Math.sin(Math.max(0, t - 1.4) * 5) * .035;
+      var texto = contacto.whatsapp ? 'Escríbenos por WhatsApp' : (contacto.telefono || 'Te esperamos');
+      ctx.font = fuente(700, u(42), F_TXT);
+      var bw = ctx.measureText(texto).width + u(42) * 1.6;
+      pastilla(texto, cx - bw / 2, cy + u(40), u(42), PRINCIPAL, SOBRE, rebote(kb) * latido);
+    }
+    var kc = salida(tramo(t, 1.4, 2.1));
+    var datos = [contacto.telefono, ubic.direccion, [ubic.codigoPostal, ubic.ciudad].filter(Boolean).join(' ')].filter(Boolean);
+    datos.forEach(function (l, i) {
+      textoSimple(l, cx, cy + u(250) + i * u(56) + (1 - kc) * u(20), u(38), 'rgba(255,255,255,.88)', 500, F_TXT, kc, true);
+    });
+    // Fundido a negro al final del vídeo
+    var kf = tramo(t, d - .35, d);
+    if (kf > 0) { ctx.fillStyle = 'rgba(0,0,0,' + kf + ')'; ctx.fillRect(0, 0, W, H); }
+  }
+
+  /* ---------- Motor ---------------------------------------------------- */
+  function dibujarEn(segundo) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.textAlign = 'left';
+    ctx.clearRect(0, 0, W, H);
+    for (var i = 0; i < escenas.length; i++) {
+      var e = escenas[i];
+      if (segundo < e.inicio || segundo >= e.inicio + e.dura + (i < escenas.length - 1 ? TRANSICION : 0)) continue;
+      var local = segundo - e.inicio;
+      ctx.save();
+      // La escena entrante se dibuja encima con un zoom-fundido.
+      if (i > 0 && local < TRANSICION) {
+        var k = salida(local / TRANSICION);
+        ctx.globalAlpha = k;
+        ctx.translate(W / 2, H / 2); ctx.scale(1.08 - .08 * k, 1.08 - .08 * k); ctx.translate(-W / 2, -H / 2);
+      }
+      e.dibujar(local, e.dura);
+      ctx.restore();
+    }
+    // Grano de película muy suave
+    ctx.save();
+    ctx.globalAlpha = .035;
+    for (var g = 0; g < 160; g++) {
+      ctx.fillStyle = Math.random() > .5 ? '#fff' : '#000';
+      ctx.fillRect(Math.random() * W, Math.random() * H, u(3), u(3));
+    }
+    ctx.restore();
+  }
+
+  var avance = document.getElementById('avance');
+  var estado = document.getElementById('estado');
+  var botonRepetir = document.getElementById('reproducir');
+  var botonDescargar = document.getElementById('descargar');
+  var inicio = 0, animando = 0, grabando = false;
+
+  function bucle(ahora) {
+    if (!inicio) inicio = ahora;
+    var s = (ahora - inicio) / 1000;
+    if (s >= DURACION) {
+      dibujarEn(DURACION - 0.001);
+      avance.style.width = '100%';
+      if (grabando) return terminarGrabacion();
+      animando = 0;
+      return;
+    }
+    dibujarEn(s);
+    avance.style.width = (s / DURACION * 100) + '%';
+    animando = requestAnimationFrame(bucle);
+  }
+  function reproducir() {
+    cancelAnimationFrame(animando);
+    inicio = 0;
+    animando = requestAnimationFrame(bucle);
+  }
+
+  function cambiarFormato() {
+    var p = document.getElementById('formato').value.split('x');
+    W = lienzo.width = Number(p[0]);
+    H = lienzo.height = Number(p[1]);
+    if (!grabando) reproducir();
+  }
+
+  /* ---------- Grabación ------------------------------------------------ */
+  var grabadora = null, trozos = [];
+  function tipoVideo() {
+    if (!window.MediaRecorder) return '';
+    var opciones = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+    for (var i = 0; i < opciones.length; i++) if (MediaRecorder.isTypeSupported(opciones[i])) return opciones[i];
+    return '';
+  }
+  function grabar() {
+    var tipo = tipoVideo();
+    if (!tipo || !lienzo.captureStream) {
+      estado.textContent = 'Este navegador no puede grabar vídeo. Prueba con Chrome o Edge en el ordenador.';
+      return;
+    }
+    try { lienzo.toDataURL(); } catch (e) {
+      estado.textContent = 'Alguna foto no permite grabarse (viene de otra web). Sube las fotos a la carpeta «fotos» y vuelve a intentarlo.';
+      return;
+    }
+    trozos = [];
+    grabadora = new MediaRecorder(lienzo.captureStream(30), { mimeType: tipo, videoBitsPerSecond: 10000000 });
+    grabadora.ondataavailable = function (e) { if (e.data.size) trozos.push(e.data); };
+    grabadora.onstop = guardar;
+    grabando = true;
+    botonDescargar.disabled = botonRepetir.disabled = true;
+    estado.textContent = 'Grabando… (' + Math.ceil(DURACION) + ' segundos, no cambies de pestaña)';
+    grabadora.start();
+    reproducir();
+  }
+  function terminarGrabacion() {
+    setTimeout(function () { grabadora.stop(); }, 150);
+  }
+  function guardar() {
+    grabando = false;
+    botonDescargar.disabled = botonRepetir.disabled = false;
+    var tipo = grabadora.mimeType || 'video/webm';
+    var extension = /mp4/.test(tipo) ? 'mp4' : 'webm';
+    var archivo = new Blob(trozos, { type: tipo });
+    var enlace = document.createElement('a');
+    var nombre = String(negocio.nombre || 'promo').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    enlace.href = URL.createObjectURL(archivo);
+    enlace.download = nombre + '-' + W + 'x' + H + '.' + extension;
+    document.body.appendChild(enlace);
+    enlace.click();
+    enlace.remove();
+    estado.textContent = '¡Listo! Vídeo descargado (' + extension.toUpperCase() + ').' +
+      (extension === 'webm' ? ' Si Instagram no lo acepta, conviértelo a MP4 en cloudconvert.com.' : '');
+  }
+
+  botonRepetir.addEventListener('click', reproducir);
+  botonDescargar.addEventListener('click', grabar);
+  document.getElementById('formato').addEventListener('change', cambiarFormato);
+
+  /* ---------- Arranque: fuentes y fotos -------------------------------- */
+  estado.textContent = 'Preparando fotos y tipografías…';
+  var familias = [F_TIT, F_TXT].filter(function (f, i, a) { return a.indexOf(f) === i; });
+  var enlaceFuentes = document.createElement('link');
+  enlaceFuentes.rel = 'stylesheet';
+  enlaceFuentes.href = 'https://fonts.googleapis.com/css2?' + familias.map(function (f) {
+    return 'family=' + f.replace(/ /g, '+') + ':ital,wght@0,400;0,500;0,600;0,700;1,500';
+  }).join('&') + '&display=swap';
+  document.head.appendChild(enlaceFuentes);
+  var cargas = [
+    cargarFoto('portada', portada.imagen),
+    cargarFoto('nosotros', nosotros.imagen)
+  ].concat(platos.map(function (p, i) { return cargarFoto('plato' + i, p.imagen); }));
+  var fuentesListas = new Promise(function (ok) {
+    enlaceFuentes.onload = function () {
+      Promise.all([
+        document.fonts.load(fuente(600, 100, F_TIT)), document.fonts.load(fuente(500, 100, F_TIT, true)),
+        document.fonts.load(fuente(400, 40, F_TXT)), document.fonts.load(fuente(700, 40, F_TXT))
+      ]).then(ok, ok);
+    };
+    enlaceFuentes.onerror = ok;
+    setTimeout(ok, 4000);
+  });
+  Promise.all(cargas.concat([fuentesListas])).then(function () {
+    estado.textContent = '';
+    reproducir();
+  });
+
+  // Para pruebas automáticas: window.promo.fotograma(segundo)
+  window.promo = { duracion: DURACION, fotograma: dibujarEn };
+})();
+</script>
+</body>
+</html>
