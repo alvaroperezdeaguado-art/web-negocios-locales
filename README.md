@@ -17,6 +17,8 @@ https://alvaroperezdeaguado-art.github.io/web-negocios-locales/
 - **Botón de WhatsApp** flotante con un mensaje ya escrito.
 - Bloque **«Déjanos tu reseña»** con botón directo a las reseñas de Google.
 - Preparada para **Google** (título, descripción y ficha de restaurante con dirección y horario) y para que al **compartir el enlace por WhatsApp o redes** salga con foto, título y descripción.
+- **Animaciones** (títulos, parallax, cinta de platos, tarjetas en 3D…) que se pueden desactivar.
+- **Vídeo promocional automático** para Reels/TikTok en `promo.html`, listo para descargar.
 - Pensada primero para móvil, muy ligera y sin nada que instalar.
 
 ---
@@ -335,6 +337,28 @@ Si el negocio usa TheFork, CoverManager, etc., pega su enlace en `enlaces` →
 `reservas`. Los botones de «Reservar» irán allí en vez de a WhatsApp (el botón
 flotante de WhatsApp se mantiene).
 
+### Vídeo promocional para Instagram y TikTok (se hace solo)
+
+Abre **`TU-WEB/promo.html`** en el ordenador (mejor con Chrome o Edge). Ahí
+verás un vídeo animado de unos 20 segundos hecho con los datos de `config.js`:
+nombre, portada, platos destacados con su precio, puntos fuertes, dirección y
+teléfono. Elige el formato (vertical para Reels, TikTok y Stories; 4:5 para
+publicaciones; cuadrado u horizontal) y pulsa **«Descargar vídeo»**. Se graba
+en tiempo real, así que no cambies de pestaña mientras tanto.
+
+> Si sale un aviso de que una foto no permite grabarse, sube esa foto a la
+> carpeta `fotos` y pon su ruta en `config.js`.
+
+### Animaciones de la web
+
+La web incluye animaciones: títulos que aparecen palabra a palabra, foto de
+portada con efecto de profundidad, chispas de brasa, una cinta con los platos
+bajo la portada, tarjetas que se inclinan en 3D, precios que cuentan y una
+barra de progreso arriba. Para una web más sobria, en `config.js` →
+`apariencia` pon `animaciones: false` (o solo `chispas: false`). Si el
+visitante tiene activado «reducir movimiento» en su móvil, se desactivan
+solas.
+
 ---
 
 ## 7. Para curiosos: cómo está hecha
@@ -348,6 +372,8 @@ fotos/                       ← fotos, logo y PDF del negocio
 assets/css/estilos.css       ← diseño (mobile-first)
 assets/js/plantilla.js       ← convierte config.js en HTML
 assets/js/app.js             ← menú móvil, pestañas, «abierto ahora», animaciones
+assets/js/movimiento.js      ← motion graphics (parallax, chispas, 3D, cinta…)
+promo.html                   ← generador del vídeo promocional
 scripts/construir.js         ← valida config.js y genera la versión publicada
 .github/workflows/publicar.yml ← publica en la rama gh-pages en cada cambio
 ```

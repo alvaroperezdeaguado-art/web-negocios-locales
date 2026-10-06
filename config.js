@@ -133,6 +133,11 @@ window.CONFIG = {
       titulos: "Fraunces",
       texto: "DM Sans",
     },
+    // Animaciones (títulos que aparecen, parallax, cinta de platos, tarjetas
+    // en 3D…). Pon false para una web más sobria.
+    animaciones: true,
+    // Chispas de brasa flotando sobre la foto de portada. Pon false para quitarlas.
+    chispas: true,
   },
 
   /* ───────────────────────────────────────────────────────────────────────
